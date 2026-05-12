@@ -143,11 +143,12 @@ Supported wrapper commands:
 workforce-browser --version
 workforce-browser --doctor
 workforce-browser doctor
+workforce-browser validate http://127.0.0.1:5173
 workforce-browser run 'print(page_info())'
 workforce-browser -- -c 'print(page_info())'
 ```
 
-`workforce-browser doctor` and `workforce-browser --doctor` report wrapper env status, workspace directories, log destination, and executable resolution, then run `browser-harness --doctor`. `workforce-browser run '<python code>'` delegates to `browser-harness -c '<python code>'`. Arguments after `workforce-browser --` pass through unchanged to `browser-harness`.
+`workforce-browser doctor` and `workforce-browser --doctor` report wrapper env status, workspace directories, log destination, and executable resolution, then run `browser-harness --doctor`. `workforce-browser validate <url>` is the default Workforce app-validation command: it starts managed headless Chrome unless `BH_VALIDATE_MODE` says otherwise, opens the URL, waits for load/network idle, captures a screenshot, writes `result.json`, prints the result JSON, and stores evidence under `~/.workforce/test-results/browser-harness/`. `workforce-browser run '<python code>'` delegates to `browser-harness -c '<python code>'`. Arguments after `workforce-browser --` pass through unchanged to `browser-harness`.
 
 Exit codes:
 
@@ -158,6 +159,8 @@ Exit codes:
 - `78`: invalid wrapper configuration, such as unsupported `BH_MODE`.
 
 Supported `BH_MODE` values are `local`, `remote-gui`, `headless`, and `external-cdp`. `external-cdp` requires `BH_CDP_URL`, `BU_CDP_URL`, or `BU_CDP_WS`. `BH_DOMAIN_SKILLS` must be `0`; the Workforce wrapper fails closed if it is set to `1`.
+
+`workforce-browser validate` uses `BH_VALIDATE_MODE=headless` by default, even when the env file keeps `BH_MODE=local` for generic interactive use. Set `BH_VALIDATE_MODE=local` only when the user wants to see the validation run in visible Chrome, or `BH_VALIDATE_MODE=external-cdp` when another process owns the browser lifecycle.
 
 Headless lifecycle commands manage only browser processes recorded in `BH_HEADLESS_STATE_FILE`.
 

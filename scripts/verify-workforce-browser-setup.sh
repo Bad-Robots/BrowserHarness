@@ -91,6 +91,7 @@ require_file "$skill_file"
 require_file "$wrapper_file"
 require_contains "$skill_file" "name: browser-automation"
 require_contains "$skill_file" "workforce-browser doctor"
+require_contains "$skill_file" "workforce-browser validate"
 require_contains "$skill_file" "BH_DOMAIN_SKILLS=0"
 
 require_dir "$HOME/.workforce"
@@ -136,7 +137,7 @@ else
 fi
 
 capabilities="$(workforce-browser --capabilities)"
-for capability in "run" "headless start" "headless status" "headless stop" "headless cleanup"; do
+for capability in "validate" "run" "headless start" "headless status" "headless stop" "headless cleanup"; do
   if grep -Fq "$capability" <<<"$capabilities"; then
     pass "capability present: $capability"
   else

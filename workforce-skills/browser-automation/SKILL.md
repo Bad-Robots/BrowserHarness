@@ -1,14 +1,24 @@
 ---
 name: browser-automation
-description: Use the local Browser Harness CLI through Workforce. Invoke when a task needs browser automation, page inspection, web UI testing, scraping, screenshots, remote GUI/CDP access, or managed headless Chrome.
+description: Use the local Browser Harness CLI through Workforce. Invoke when a task needs to validate a built web app in a browser, run browser QA, inspect pages, test UI, scrape, capture screenshots, use remote GUI/CDP access, or manage headless Chrome.
 category: automation
 allowed-tools: Bash, Read, Edit, Write
-argument-hint: "[doctor | run | headless <start|status|stop> | -- <args>]"
+argument-hint: "[validate <url> | doctor | run | headless <start|status|stop> | -- <args>]"
 ---
 
 # Browser Automation
 
-Use `workforce-browser` as the stable Workforce entrypoint for Browser Harness. The repo source is `scripts/workforce-browser`, and agent installs expose it on `PATH` as `workforce-browser`. Do not call `browser-harness` directly unless you are debugging the wrapper itself. The setup script defaults to `BH_MODE=local`.
+Use `workforce-browser` as the stable Workforce entrypoint for Browser Harness. The repo source is `scripts/workforce-browser`, and agent installs expose it on `PATH` as `workforce-browser`. Do not call `browser-harness` directly unless you are debugging the wrapper itself.
+
+For Workforce development validation, prefer the first-class validation command:
+
+```bash
+workforce-browser validate http://127.0.0.1:5173
+```
+
+`validate` defaults to managed headless Chrome through `BH_VALIDATE_MODE=headless`. It starts the managed browser if needed, opens the app URL, waits for load/network idle, captures a screenshot, writes `result.json`, prints the result JSON, and stores evidence under `~/.workforce/test-results/browser-harness/`.
+
+Use visible local Chrome only when the user wants to watch or debug the browser interactively.
 
 ## First Check
 
@@ -44,7 +54,20 @@ test -f pyproject.toml && test -d src/browser_harness && git remote -v
 
 ## Common Commands
 
-Run a small browser task in the default local mode:
+Validate a web app Workforce just built:
+
+```bash
+workforce-browser validate http://127.0.0.1:5173
+```
+
+Validate with a visible local browser when the user explicitly wants to watch:
+
+```bash
+BH_VALIDATE_MODE=local \
+workforce-browser validate http://127.0.0.1:5173
+```
+
+Run a small browser task in local mode:
 
 ```bash
 BH_MODE=local \
@@ -77,6 +100,8 @@ workforce-browser -- -c 'print(page_info())'
 `BH_MODE=local` is the default. Use it when the browser and agent run on the same machine.
 
 `BH_MODE=headless` uses the wrapper-managed headless lifecycle. Start it before browser work and stop it after the task.
+
+`BH_VALIDATE_MODE=headless` is the validation default even if `BH_MODE` is local. Override it only when the user asks for visible debugging or an external CDP target.
 
 `BH_MODE=external-cdp` is for a browser managed by another process. Prefer `BH_CDP_URL`; `BU_CDP_URL` and `BU_CDP_WS` are compatibility variables passed through to Browser Harness internals. Use only trusted local, VPN, or explicitly approved CDP endpoints.
 
@@ -114,3 +139,13 @@ workforce-browser headless stop
 ```
 
 Keep host evidence under `~/.workforce/test-results/browser-harness/`.
+
+## App Validation Contract
+
+After building or modifying a web app:
+
+1. Start the app server and identify its local URL.
+2. Run `workforce-browser validate <url>`.
+3. Treat a nonzero exit as a validation failure.
+4. Report the `result.json` path, screenshot path, final URL, and failures.
+5. Use lower-level `workforce-browser run` only for deeper follow-up interactions after the validation command establishes the page loads.

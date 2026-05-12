@@ -7,6 +7,7 @@ Usage:
   workforce-browser --version
   workforce-browser --doctor
   workforce-browser doctor
+  workforce-browser validate <url>
   workforce-browser run '<python code>'
   workforce-browser headless start|status|stop|cleanup
   workforce-browser --capabilities
@@ -72,6 +73,28 @@ fi
 require_browser_harness() {
   if [[ -z "$browser_harness_bin" ]]; then
     die 69 "browser-harness not found on PATH; run uv tool install -e . from the BrowserHarness repo"
+  fi
+}
+
+configure_browser_env() {
+  if [[ -n "${BH_CDP_URL:-}" && -z "${BU_CDP_URL:-}" ]]; then
+    export BU_CDP_URL="$BH_CDP_URL"
+  fi
+
+  if [[ "$BH_MODE" == "headless" ]]; then
+    if ! load_headless_state; then
+      die 78 "BH_MODE=headless requires a managed browser; run workforce-browser headless start"
+    fi
+    if [[ "${BH_HEADLESS_MANAGED:-}" != "1" ]]; then
+      die 78 "refusing unmanaged headless state at $headless_state_file"
+    fi
+    if ! pid_alive "${BH_HEADLESS_PID:-}"; then
+      die 78 "managed headless pid ${BH_HEADLESS_PID:-missing} is not alive; run workforce-browser headless cleanup"
+    fi
+    if ! cdp_ready "${BH_HEADLESS_CDP_URL:-}"; then
+      die 78 "managed headless CDP is not ready at ${BH_HEADLESS_CDP_URL:-missing}"
+    fi
+    export BU_CDP_URL="$BH_HEADLESS_CDP_URL"
   fi
 }
 
@@ -262,6 +285,129 @@ headless_stop() {
   printf 'headless stopped: removed managed state %s\n' "$headless_state_file"
 }
 
+validate_url() {
+  local url="${1:-}"
+  if [[ -z "$url" ]]; then
+    die 64 "validate requires a URL"
+  fi
+  case "$url" in
+    http://*|https://*) ;;
+    *) die 64 "validate requires an http:// or https:// URL" ;;
+  esac
+
+  require_browser_harness
+
+  local validate_mode="${BH_VALIDATE_MODE:-headless}"
+  case "$validate_mode" in
+    local|remote-gui|headless|external-cdp) ;;
+    *) die 78 "unsupported BH_VALIDATE_MODE '$validate_mode'" ;;
+  esac
+
+  export BH_MODE="$validate_mode"
+  if [[ "$BH_MODE" == "headless" ]]; then
+    headless_start >&2
+  fi
+  configure_browser_env
+
+  local timestamp safe_url evidence_dir
+  timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+  safe_url="$(printf '%s' "$url" | sed -E 's#^[a-zA-Z]+://##; s#[^A-Za-z0-9._-]+#-#g; s#^-+|-+$##g' | cut -c1-80)"
+  if [[ -z "$safe_url" ]]; then
+    safe_url="app"
+  fi
+  evidence_dir="$BH_TEST_RESULTS/validate-$timestamp-$safe_url"
+  mkdir -p "$evidence_dir"
+
+  export BH_VALIDATE_URL="$url"
+  export BH_VALIDATE_EVIDENCE_DIR="$evidence_dir"
+  export BH_VALIDATE_TIMEOUT="${BH_VALIDATE_TIMEOUT:-15}"
+  export BH_VALIDATE_IDLE_TIMEOUT="${BH_VALIDATE_IDLE_TIMEOUT:-5}"
+
+  "$browser_harness_bin" -c "$(cat <<'PY'
+import json
+import os
+import sys
+import traceback
+
+url = os.environ["BH_VALIDATE_URL"]
+evidence_dir = os.environ["BH_VALIDATE_EVIDENCE_DIR"]
+timeout = float(os.environ.get("BH_VALIDATE_TIMEOUT", "15"))
+idle_timeout = float(os.environ.get("BH_VALIDATE_IDLE_TIMEOUT", "5"))
+screenshot = os.path.join(evidence_dir, "screenshot.png")
+result_path = os.path.join(evidence_dir, "result.json")
+
+def write_result(result):
+    with open(result_path, "w", encoding="utf-8") as f:
+        json.dump(result, f, indent=2, sort_keys=True)
+        f.write("\n")
+    print(json.dumps(result, indent=2, sort_keys=True))
+
+try:
+    new_tab(url)
+    loaded = wait_for_load(timeout)
+    network_idle = wait_for_network_idle(idle_timeout)
+    info = page_info()
+    ready_state = js("document.readyState")
+    has_body = bool(js("!!document.body"))
+    body_text_length = int(js("(document.body && document.body.innerText || '').length") or 0)
+    console_events = []
+    for event in drain_events():
+        method = event.get("method", "")
+        params = event.get("params", {})
+        if method == "Runtime.consoleAPICalled":
+            console_events.append({
+                "type": params.get("type"),
+                "text": " ".join(str(arg.get("value", arg.get("description", ""))) for arg in params.get("args", [])),
+            })
+        elif method == "Log.entryAdded":
+            entry = params.get("entry", {})
+            console_events.append({
+                "type": entry.get("level"),
+                "text": entry.get("text"),
+            })
+    shot = capture_screenshot(screenshot, full=True, max_dim=1800)
+    failures = []
+    final_url = info.get("url", "")
+    if final_url.startswith(("about:", "chrome://", "devtools://")):
+        failures.append(f"browser did not navigate to an app page: {final_url}")
+    if ready_state not in ("interactive", "complete"):
+        failures.append(f"document.readyState is {ready_state}")
+    if not has_body:
+        failures.append("document.body is missing")
+    result = {
+        "ok": not failures,
+        "url": url,
+        "mode": os.environ.get("BH_MODE"),
+        "cdp_url": os.environ.get("BU_CDP_URL") or os.environ.get("BU_CDP_WS") or "",
+        "page_info": info,
+        "ready_state": ready_state,
+        "loaded": loaded,
+        "network_idle": network_idle,
+        "body_text_length": body_text_length,
+        "console_events": console_events[-20:],
+        "failures": failures,
+        "screenshot": shot,
+        "result": result_path,
+    }
+    write_result(result)
+    sys.exit(0 if result["ok"] else 1)
+except Exception as exc:
+    result = {
+        "ok": False,
+        "url": url,
+        "mode": os.environ.get("BH_MODE"),
+        "cdp_url": os.environ.get("BU_CDP_URL") or os.environ.get("BU_CDP_WS") or "",
+        "error": str(exc),
+        "traceback": traceback.format_exc(),
+        "screenshot": screenshot,
+        "result": result_path,
+    }
+    write_result(result)
+    sys.exit(1)
+PY
+)"
+}
+
 if [[ $# -eq 0 ]]; then
   usage
   exit 64
@@ -278,6 +424,7 @@ commands:
   --version
   --doctor
   doctor
+  validate
   run
   headless start
   headless status
@@ -338,7 +485,12 @@ CAPS
       die 64 "run requires a Python code string"
     fi
     require_browser_harness
+    configure_browser_env
     exec "$browser_harness_bin" -c "$1"
+    ;;
+  validate)
+    shift
+    validate_url "${1:-}"
     ;;
   headless)
     shift

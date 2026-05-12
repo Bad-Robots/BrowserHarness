@@ -65,9 +65,12 @@ Common commands:
 
 ```bash
 workforce-browser doctor
+workforce-browser validate http://127.0.0.1:5173
 workforce-browser run 'print(page_info())'
 workforce-browser headless status
 ```
+
+For Workforce validation of a newly built web app, prefer `workforce-browser validate <url>`. It uses managed headless Chrome by default, writes `result.json` and a screenshot under `~/.workforce/test-results/browser-harness/`, and exits nonzero if the page fails the basic browser-load checks. Use visible local Chrome only when the user explicitly wants to watch or debug the browser interactively.
 
 `remote-gui`, Tobor, and Twiki support is host-local: the repo, wrapper, env file, PATH, and CDP/browser smoke test must pass on the target host itself. RustDesk is only for human GUI inspection or repair; automation still goes through CDP.
 
