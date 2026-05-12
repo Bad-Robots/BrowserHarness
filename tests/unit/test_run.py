@@ -15,6 +15,36 @@ def test_c_flag_executes_code():
     assert stdout.getvalue().strip() == "hello from -c"
 
 
+def test_version_prints_installed_version():
+    stdout = StringIO()
+    with patch.object(sys, "argv", ["browser-harness", "--version"]), \
+         patch("browser_harness.run._version", return_value="1.2.3"), \
+         patch("sys.stdout", stdout):
+        run.main()
+    assert stdout.getvalue().strip() == "1.2.3"
+
+
+def test_version_prints_unknown_when_metadata_missing():
+    stdout = StringIO()
+    with patch.object(sys, "argv", ["browser-harness", "--version"]), \
+         patch("browser_harness.run._version", return_value=""), \
+         patch("sys.stdout", stdout):
+        run.main()
+    assert stdout.getvalue().strip() == "unknown"
+
+
+def test_doctor_dispatches_and_exits_with_doctor_status():
+    with patch.object(sys, "argv", ["browser-harness", "--doctor"]), \
+         patch("browser_harness.run.run_doctor", return_value=7) as mock_doctor:
+        try:
+            run.main()
+        except SystemExit as exc:
+            assert exc.code == 7
+        else:
+            raise AssertionError("--doctor should exit with run_doctor's status")
+    mock_doctor.assert_called_once_with()
+
+
 def test_cloud_bootstrap_on_headless_server(monkeypatch):
     """No daemon, no local Chrome, API key + BU_AUTOSPAWN set -> auto-provision cloud daemon."""
     monkeypatch.setenv("BROWSER_USE_API_KEY", "test-key")

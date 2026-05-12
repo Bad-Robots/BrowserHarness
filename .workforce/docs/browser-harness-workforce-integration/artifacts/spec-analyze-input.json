@@ -1,0 +1,12 @@
+{
+  "slug": "browser-harness-workforce-integration",
+  "prefix": "BHWI",
+  "source_plan": "workforce-integration/browser-harness-cli-plan.md",
+  "docs_root": ".workforce/docs/browser-harness-workforce-integration",
+  "mode": "plan-only",
+  "notes": [
+    "No canonical build-readiness AC bundle was provided.",
+    "FR coverage is derived from the accepted integration plan.",
+    "Implementation must not begin until the user explicitly asks for execution."
+  ]
+}

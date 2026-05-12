@@ -1,0 +1,54 @@
+BHWI-E3-T2 skill discovery evidence
+timestamp=2026-05-12T18:21:29Z
+
+[skill symlink]
+lrwxr-xr-x@ 1 mattheller  staff  86 May 12 14:19 /Users/mattheller/.workforce/skills/browser-automation/SKILL.md -> /Users/mattheller/Projects/BrowserHarness/workforce-skills/browser-automation/SKILL.md
+target=/Users/mattheller/Projects/BrowserHarness/workforce-skills/browser-automation/SKILL.md
+
+[skill content]
+path= /Users/mattheller/.workforce/skills/browser-automation/SKILL.md
+name_present= True
+doctor_present= True
+wrapper_present= True
+
+[wrapper path]
+/Users/mattheller/.workforce/bin/workforce-browser
+
+[capabilities]
+commands:
+  --version
+  --doctor
+  doctor
+  run
+  headless start
+  headless status
+  headless stop
+  headless cleanup
+  --
+
+[browser harness]
+/Users/mattheller/.local/bin/browser-harness
+0.1.0
+
+[doctor]
+workforce-browser doctor
+  [ok] env file           /Users/mattheller/.workforce/browser-harness.env
+  [ok] mode               local
+  [ok] workspace          /Users/mattheller/.workforce/browser-agent-workspace
+  [ok] domain skills      /Users/mattheller/.workforce/browser-agent-workspace/domain-skills
+  [ok] interaction skills /Users/mattheller/.workforce/browser-agent-workspace/interaction-skills
+  [ok] test results       /Users/mattheller/.workforce/test-results/browser-harness
+  [ok] state dir          /Users/mattheller/.workforce/state/browser-harness
+  [ok] log dir            /Users/mattheller/.workforce/logs/browser-harness
+  [ok] browser-harness    /Users/mattheller/.local/bin/browser-harness
+browser-harness doctor
+  platform          Darwin 24.6.0
+  python            3.11.15
+  version           0.1.0 (git)
+  latest release    (could not reach github)
+  [ok  ] chrome running
+  [FAIL] daemon alive — see install.md
+  [FAIL] active browser connections — 0
+  [FAIL] profile-use installed — optional: curl -fsSL https://browser-use.com/profile.sh | sh
+  [FAIL] BROWSER_USE_API_KEY set — optional: needed only for cloud browsers / profile sync
+doctor_exit=1

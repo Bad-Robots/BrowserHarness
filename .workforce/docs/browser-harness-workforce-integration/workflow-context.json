@@ -1,0 +1,12 @@
+{
+  "slug": "browser-harness-workforce-integration",
+  "prefix": "BHWI",
+  "mode": "plan-only",
+  "docs_root": ".workforce/docs/browser-harness-workforce-integration",
+  "source_of_truth": "workforce-integration/browser-harness-cli-plan.md",
+  "current_skill": "workforce-os:spec-to-ship",
+  "next_skill": "workforce-os:spec-decomposition",
+  "next_action": "Begin implementation from BHWI-E1-T1 only after explicit user approval.",
+  "review_status": "APPROVED_WITH_NOTES_ACCEPTED",
+  "created_at": "2026-05-12"
+}

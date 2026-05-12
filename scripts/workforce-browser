@@ -1,0 +1,362 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  workforce-browser --version
+  workforce-browser --doctor
+  workforce-browser doctor
+  workforce-browser run '<python code>'
+  workforce-browser headless start|status|stop|cleanup
+  workforce-browser --capabilities
+  workforce-browser -- <browser-harness args...>
+  workforce-browser <browser-harness args...>
+
+Loads ~/.workforce/browser-harness.env by default, validates BH_MODE, then delegates to browser-harness.
+USAGE
+}
+
+die() {
+  local code="$1"
+  shift
+  printf 'workforce-browser: %s\n' "$*" >&2
+  exit "$code"
+}
+
+wf_home="${WORKFORCE_HOME:-$HOME/.workforce}"
+env_file="${BH_ENV_FILE:-$wf_home/browser-harness.env}"
+
+env_loaded=0
+if [[ -f "$env_file" ]]; then
+  # The setup script writes a shell env file. Source it with export enabled so
+  # delegated browser-harness processes inherit the values.
+  set -a
+  # shellcheck disable=SC1090
+  . "$env_file"
+  set +a
+  env_loaded=1
+fi
+
+BH_MODE="${BH_MODE:-local}"
+BH_WORKSPACE="${BH_WORKSPACE:-$wf_home/browser-agent-workspace}"
+BH_BIN_DIR="${BH_BIN_DIR:-$wf_home/bin}"
+BH_INSTALL_DIR="${BH_INSTALL_DIR:-$HOME/workforce/browser-harness}"
+BH_TEST_RESULTS="${BH_TEST_RESULTS:-$wf_home/test-results/browser-harness}"
+BH_STATE_DIR="${BH_STATE_DIR:-$wf_home/state/browser-harness}"
+BH_LOG_DIR="${BH_LOG_DIR:-$wf_home/logs/browser-harness}"
+
+case "$BH_MODE" in
+  local|remote-gui|headless|external-cdp) ;;
+  *) die 78 "unsupported BH_MODE '$BH_MODE' in $env_file" ;;
+esac
+
+case "${BH_DOMAIN_SKILLS:-0}" in
+  0) ;;
+  1) die 78 "BH_DOMAIN_SKILLS=1 is disabled for Workforce; keep BH_DOMAIN_SKILLS=0 until a reviewed promotion command exists" ;;
+  *) die 78 "unsupported BH_DOMAIN_SKILLS '${BH_DOMAIN_SKILLS}' in $env_file; expected 0 or 1" ;;
+esac
+
+if [[ "$BH_MODE" == "external-cdp" && -z "${BH_CDP_URL:-}" && -z "${BU_CDP_URL:-}" && -z "${BU_CDP_WS:-}" ]]; then
+  die 78 "BH_MODE=external-cdp requires BH_CDP_URL, BU_CDP_URL, or BU_CDP_WS"
+fi
+
+browser_harness_bin="${BH_BROWSER_HARNESS_BIN:-}"
+if [[ -z "$browser_harness_bin" ]]; then
+  browser_harness_bin="$(command -v browser-harness || true)"
+fi
+if [[ -z "$browser_harness_bin" && -x "$BH_INSTALL_DIR/.venv/bin/browser-harness" ]]; then
+  browser_harness_bin="$BH_INSTALL_DIR/.venv/bin/browser-harness"
+fi
+
+require_browser_harness() {
+  if [[ -z "$browser_harness_bin" ]]; then
+    die 69 "browser-harness not found on PATH; run uv tool install -e . from the BrowserHarness repo"
+  fi
+}
+
+doctor_row() {
+  local status="$1"
+  local label="$2"
+  local detail="${3:-}"
+  printf '  [%s] %-18s %s\n' "$status" "$label" "$detail"
+}
+
+headless_state_file="${BH_HEADLESS_STATE_FILE:-$BH_STATE_DIR/headless-session.env}"
+headless_lock_dir="${BH_HEADLESS_LOCK_DIR:-$BH_STATE_DIR/headless.lock}"
+headless_port="${BH_HEADLESS_PORT:-9222}"
+headless_profile_dir="${BH_HEADLESS_PROFILE_DIR:-$BH_STATE_DIR/headless-profile}"
+headless_log_file="${BH_HEADLESS_LOG_FILE:-$BH_LOG_DIR/headless-browser.log}"
+
+find_browser_bin() {
+  if [[ -n "${BH_CHROME_BIN:-}" ]]; then
+    if [[ -x "${BH_CHROME_BIN:-}" ]]; then
+      printf '%s\n' "$BH_CHROME_BIN"
+      return 0
+    fi
+    return 1
+  fi
+  for candidate in \
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge" \
+    google-chrome-stable google-chrome chromium chromium-browser microsoft-edge msedge; do
+    if [[ -x "$candidate" ]]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+    if command -v "$candidate" >/dev/null 2>&1; then
+      command -v "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+pid_alive() {
+  local pid="${1:-}"
+  [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" >/dev/null 2>&1
+}
+
+cdp_ready() {
+  local url="${1:-}"
+  [[ -n "$url" ]] && curl -fsS --max-time 1 "$url/json/version" >/dev/null 2>&1
+}
+
+load_headless_state() {
+  if [[ -f "$headless_state_file" ]]; then
+    # shellcheck disable=SC1090
+    . "$headless_state_file"
+    return 0
+  fi
+  return 1
+}
+
+write_headless_state() {
+  local pid="$1"
+  local browser_bin="$2"
+  local cdp_url="$3"
+  mkdir -p "$BH_STATE_DIR" "$BH_LOG_DIR" "$headless_profile_dir"
+  cat > "$headless_state_file" <<STATE
+BH_HEADLESS_MANAGED=1
+BH_HEADLESS_PID="$pid"
+BH_HEADLESS_PORT="$headless_port"
+BH_HEADLESS_CDP_URL="$cdp_url"
+BH_HEADLESS_PROFILE_DIR="$headless_profile_dir"
+BH_HEADLESS_BROWSER_BIN="$browser_bin"
+BH_HEADLESS_LOG_FILE="$headless_log_file"
+BH_HEADLESS_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+STATE
+  chmod 600 "$headless_state_file"
+}
+
+acquire_headless_lock() {
+  if ! mkdir "$headless_lock_dir" 2>/dev/null; then
+    die 75 "headless lifecycle lock already held at $headless_lock_dir"
+  fi
+}
+
+release_headless_lock() {
+  rmdir "$headless_lock_dir" 2>/dev/null || true
+}
+
+headless_status() {
+  if ! load_headless_state; then
+    printf 'headless stopped: no managed state at %s\n' "$headless_state_file"
+    return 1
+  fi
+  if [[ "${BH_HEADLESS_MANAGED:-}" != "1" ]]; then
+    printf 'headless unknown: state is not marked managed at %s\n' "$headless_state_file"
+    return 78
+  fi
+  if ! pid_alive "${BH_HEADLESS_PID:-}"; then
+    printf 'headless stale: pid %s is not alive; run workforce-browser headless cleanup\n' "${BH_HEADLESS_PID:-missing}"
+    return 2
+  fi
+  if cdp_ready "${BH_HEADLESS_CDP_URL:-}"; then
+    printf 'headless ready: %s pid=%s log=%s\n' "$BH_HEADLESS_CDP_URL" "$BH_HEADLESS_PID" "${BH_HEADLESS_LOG_FILE:-$headless_log_file}"
+    return 0
+  fi
+  printf 'headless starting: pid=%s cdp=%s log=%s\n' "$BH_HEADLESS_PID" "${BH_HEADLESS_CDP_URL:-missing}" "${BH_HEADLESS_LOG_FILE:-$headless_log_file}"
+  return 3
+}
+
+headless_cleanup_stale() {
+  if load_headless_state && pid_alive "${BH_HEADLESS_PID:-}"; then
+    printf 'headless cleanup skipped: managed pid %s is still alive\n' "$BH_HEADLESS_PID"
+    return 1
+  fi
+  rm -f "$headless_state_file"
+  printf 'headless cleanup complete: removed stale state %s\n' "$headless_state_file"
+}
+
+headless_start() {
+  acquire_headless_lock
+  trap 'release_headless_lock' RETURN
+  if headless_status >/dev/null 2>&1; then
+    headless_status
+    return 0
+  fi
+  if load_headless_state && ! pid_alive "${BH_HEADLESS_PID:-}"; then
+    rm -f "$headless_state_file"
+  fi
+  local cdp_url="http://127.0.0.1:$headless_port"
+  if cdp_ready "$cdp_url"; then
+    die 78 "CDP endpoint already responds at $cdp_url but is not managed by workforce-browser"
+  fi
+  local browser_bin
+  browser_bin="$(find_browser_bin)" || die 69 "no Chrome/Chromium executable found; set BH_CHROME_BIN"
+  mkdir -p "$headless_profile_dir" "$BH_LOG_DIR" "$BH_STATE_DIR"
+  "$browser_bin" \
+    --headless=new \
+    --remote-debugging-address=127.0.0.1 \
+    --remote-debugging-port="$headless_port" \
+    --user-data-dir="$headless_profile_dir" \
+    --no-first-run \
+    --no-default-browser-check \
+    about:blank >"$headless_log_file" 2>&1 &
+  local pid="$!"
+  write_headless_state "$pid" "$browser_bin" "$cdp_url"
+  for _ in $(seq 1 100); do
+    if cdp_ready "$cdp_url"; then
+      printf 'headless started: %s pid=%s log=%s\n' "$cdp_url" "$pid" "$headless_log_file"
+      return 0
+    fi
+    if ! pid_alive "$pid"; then
+      printf 'headless failed: browser exited; log=%s\n' "$headless_log_file" >&2
+      rm -f "$headless_state_file"
+      return 69
+    fi
+    sleep 0.2
+  done
+  printf 'headless timeout: CDP not ready at %s; log=%s\n' "$cdp_url" "$headless_log_file" >&2
+  kill "$pid" 2>/dev/null || true
+  wait "$pid" 2>/dev/null || true
+  rm -f "$headless_state_file"
+  return 69
+}
+
+headless_stop() {
+  acquire_headless_lock
+  trap 'release_headless_lock' RETURN
+  if ! load_headless_state; then
+    printf 'headless already stopped: no managed state at %s\n' "$headless_state_file"
+    return 0
+  fi
+  if [[ "${BH_HEADLESS_MANAGED:-}" != "1" ]]; then
+    die 78 "refusing to stop unmarked headless state at $headless_state_file"
+  fi
+  if pid_alive "${BH_HEADLESS_PID:-}"; then
+    kill "$BH_HEADLESS_PID" 2>/dev/null || true
+    for _ in $(seq 1 25); do
+      if ! pid_alive "$BH_HEADLESS_PID"; then
+        break
+      fi
+      sleep 0.2
+    done
+    if pid_alive "$BH_HEADLESS_PID"; then
+      kill -KILL "$BH_HEADLESS_PID" 2>/dev/null || true
+    fi
+    wait "$BH_HEADLESS_PID" 2>/dev/null || true
+  fi
+  rm -f "$headless_state_file"
+  printf 'headless stopped: removed managed state %s\n' "$headless_state_file"
+}
+
+if [[ $# -eq 0 ]]; then
+  usage
+  exit 64
+fi
+
+case "$1" in
+  -h|--help)
+    usage
+    exit 0
+    ;;
+  --capabilities)
+    cat <<'CAPS'
+commands:
+  --version
+  --doctor
+  doctor
+  run
+  headless start
+  headless status
+  headless stop
+  headless cleanup
+  --
+CAPS
+    exit 0
+    ;;
+  --version)
+    require_browser_harness
+    exec "$browser_harness_bin" --version
+    ;;
+  --doctor|doctor)
+    doctor_status=0
+    printf 'workforce-browser doctor\n'
+    if [[ "$env_loaded" -eq 1 ]]; then
+      doctor_row ok "env file" "$env_file"
+    else
+      doctor_row FAIL "env file" "$env_file missing; run scripts/setup-workforce-browser-env.sh"
+      doctor_status=78
+    fi
+    doctor_row ok "mode" "$BH_MODE"
+    for dir_spec in \
+      "workspace:$BH_WORKSPACE" \
+      "domain skills:$BH_WORKSPACE/domain-skills" \
+      "interaction skills:$BH_WORKSPACE/interaction-skills" \
+      "test results:$BH_TEST_RESULTS" \
+      "state dir:$BH_STATE_DIR" \
+      "log dir:$BH_LOG_DIR"; do
+      label="${dir_spec%%:*}"
+      path="${dir_spec#*:}"
+      if [[ -d "$path" ]]; then
+        doctor_row ok "$label" "$path"
+      else
+        doctor_row FAIL "$label" "$path missing"
+        doctor_status=78
+      fi
+    done
+    if [[ -n "$browser_harness_bin" ]]; then
+      doctor_row ok "browser-harness" "$browser_harness_bin"
+      set +e
+      "$browser_harness_bin" --doctor
+      bh_status="$?"
+      set -e
+      if [[ "$bh_status" -ne 0 && "$doctor_status" -eq 0 ]]; then
+        doctor_status="$bh_status"
+      fi
+    else
+      doctor_row FAIL "browser-harness" "missing on PATH"
+      doctor_status=69
+    fi
+    exit "$doctor_status"
+    ;;
+  run)
+    shift
+    if [[ $# -lt 1 ]]; then
+      die 64 "run requires a Python code string"
+    fi
+    require_browser_harness
+    exec "$browser_harness_bin" -c "$1"
+    ;;
+  headless)
+    shift
+    case "${1:-}" in
+      start) headless_start ;;
+      status) headless_status ;;
+      stop) headless_stop ;;
+      cleanup) headless_cleanup_stale ;;
+      *) die 64 "usage: workforce-browser headless start|status|stop|cleanup" ;;
+    esac
+    ;;
+  --)
+    shift
+    require_browser_harness
+    exec "$browser_harness_bin" "$@"
+    ;;
+  *)
+    require_browser_harness
+    exec "$browser_harness_bin" "$@"
+    ;;
+esac

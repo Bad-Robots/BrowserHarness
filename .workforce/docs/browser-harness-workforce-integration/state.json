@@ -1,0 +1,87 @@
+{
+  "$schema": "https://workforce.local/spec-to-ship/state-schema.json",
+  "project": {
+    "slug": "browser-harness-workforce-integration",
+    "prefix": "BHWI",
+    "size": "large",
+    "mode": "plan-only",
+    "source_of_truth": "workforce-integration/browser-harness-cli-plan.md",
+    "review_status": "APPROVED_WITH_NOTES_ACCEPTED",
+    "fr_coverage": {
+      "artifact_path": "FR-COVERAGE.md",
+      "required_fr_ids": ["FR-1", "FR-2", "FR-3", "FR-4", "FR-5", "FR-6", "FR-7", "FR-8", "FR-9", "FR-10"],
+      "covered_fr_ids": ["FR-1", "FR-2", "FR-3", "FR-4", "FR-5", "FR-6", "FR-7", "FR-8", "FR-9", "FR-10"],
+      "gap_fr_ids": []
+    },
+    "ac_bundle_status": "not_available_for_this_planning_run",
+    "review_config": {
+      "architecture": "kimi-k2.6",
+      "implementation": "codex-cli-default",
+      "tiebreaker": "deepseek-v4-pro"
+    }
+  },
+  "epics": [
+    {
+      "id": "BHWI-E1",
+      "title": "Local CLI Foundation",
+      "status": "DONE",
+      "tickets": [
+        {"id": "BHWI-E1-T1", "title": "Verify Installable CLI Contract", "status": "DONE", "blocked_by": [], "blocks": ["BHWI-E1-T2"], "spec_reference": "TASKS.md#bhwi-e1-t1-verify-installable-cli-contract", "effort_minutes": 45, "validation_commands": ["uv run --with pytest python -m pytest tests/unit/test_run.py -q", "uv run browser-harness --version", "uv run browser-harness --doctor"], "execution": {"validation_status": "PASS_WITH_ENV_NOTE", "result_report_path": ".workforce/docs/browser-harness-workforce-integration/PROGRESS.md", "preserved_reason": "doctor command executed and returned expected setup failure because daemon/browser connection is not active on this host"}, "review_log": [{"gate": "code_diff", "task_id": "BHWI-E1-T1-code-review-20260512", "verdict": "APPROVED_WITH_NOTES", "blocking": 0, "material": 8, "nit": 1}]},
+        {"id": "BHWI-E1-T2", "title": "Create Shared Workforce Env And Workspace Setup", "status": "DONE", "blocked_by": ["BHWI-E1-T1"], "blocks": ["BHWI-E1-T3"], "spec_reference": "TASKS.md#bhwi-e1-t2-create-shared-workforce-env-and-workspace-setup", "effort_minutes": 60, "validation_commands": ["bash -n scripts/setup-workforce-browser-env.sh", "HOME=$(mktemp -d /private/tmp/bhwi-e1-t2-home.XXXXXX) bash scripts/setup-workforce-browser-env.sh"], "execution": {"validation_status": "PASS", "result_report_path": ".workforce/docs/browser-harness-workforce-integration/PROGRESS.md"}, "review_log": [{"gate": "code_diff", "task_id": "BHWI-E1-T2-code-review-20260512", "verdict": "APPROVED_WITH_NOTES", "blocking": 0, "material": 12, "nit": 1}]},
+        {"id": "BHWI-E1-T3", "title": "Implement workforce-browser Wrapper", "status": "DONE", "blocked_by": ["BHWI-E1-T2"], "blocks": ["BHWI-E1-T4"], "spec_reference": "TASKS.md#bhwi-e1-t3-implement-workforce-browser-wrapper", "effort_minutes": 90, "validation_commands": ["bash -n scripts/workforce-browser", "temp HOME/PATH wrapper delegation checks"], "execution": {"validation_status": "PASS", "result_report_path": ".workforce/docs/browser-harness-workforce-integration/PROGRESS.md"}, "review_log": [{"gate": "code_diff", "task_id": "BHWI-E1-T3-code-review-r2-20260512", "verdict": "APPROVED_WITH_NOTES", "blocking": 0, "material": 11, "nit": 1}]},
+        {"id": "BHWI-E1-T4", "title": "Add Wrapper Doctor Diagnostics", "status": "DONE", "blocked_by": ["BHWI-E1-T3"], "blocks": ["BHWI-E2-T1", "BHWI-E2-T2", "BHWI-E2-T4", "BHWI-E3-T1"], "spec_reference": "TASKS.md#bhwi-e1-t4-add-wrapper-doctor-diagnostics", "effort_minutes": 75, "validation_commands": ["bash -n scripts/setup-workforce-browser-env.sh && bash -n scripts/workforce-browser", "temp HOME/PATH wrapper doctor success/failure/missing-env checks"], "execution": {"validation_status": "PASS", "result_report_path": ".workforce/docs/browser-harness-workforce-integration/PROGRESS.md"}, "review_log": [{"gate": "code_diff", "task_id": "BHWI-E1-T4-code-review-20260512", "verdict": "APPROVED_WITH_NOTES", "blocking": 0, "material": 11, "nit": 1}]}
+      ]
+    },
+    {
+      "id": "BHWI-E2",
+      "title": "Browser Modes",
+      "status": "TODO",
+      "tickets": [
+        {"id": "BHWI-E2-T1", "title": "Verify Local GUI Mode", "status": "BLOCKED", "blocked_by": ["BHWI-E1-T4"], "blocker_reason": "This host currently has no active Browser Harness daemon/browser connection; resume when local Chrome remote debugging is available.", "blocks": [], "spec_reference": "TASKS.md#bhwi-e2-t1-verify-local-gui-mode", "effort_minutes": 45},
+        {"id": "BHWI-E2-T2", "title": "Implement Headless Lifecycle Commands", "status": "DONE", "blocked_by": ["BHWI-E1-T4"], "blocks": ["BHWI-E2-T3"], "spec_reference": "TASKS.md#bhwi-e2-t2-implement-headless-lifecycle-commands", "effort_minutes": 120, "validation_commands": ["bash -n scripts/workforce-browser && bash -n scripts/setup-workforce-browser-env.sh", "temp HOME headless status/cleanup/no-browser/timeout-cleanup checks"], "execution": {"validation_status": "PASS", "result_report_path": ".workforce/docs/browser-harness-workforce-integration/PROGRESS.md"}, "review_log": [{"gate": "code_diff", "task_id": "BHWI-E2-T2-code-review-20260512", "verdict": "APPROVED_WITH_NOTES", "blocking": 0, "material": 11, "nit": 1}]},
+        {"id": "BHWI-E2-T3", "title": "Verify Headless Mode", "status": "DONE", "blocked_by": ["BHWI-E2-T2"], "blocks": [], "spec_reference": "TASKS.md#bhwi-e2-t3-verify-headless-mode", "effort_minutes": 60, "validation_commands": ["managed temp-home headless start/status/curl-stop smoke on Chrome port 59995"], "execution": {"validation_status": "PASS", "result_report_path": ".workforce/docs/browser-harness-workforce-integration/PROGRESS.md"}, "review_log": [{"gate": "code_diff", "task_id": "BHWI-E2-T2-T3-code-review-r2-20260512", "verdict": "APPROVED_WITH_NOTES", "blocking": 0, "material": 12, "nit": 1}]},
+        {"id": "BHWI-E2-T4", "title": "Document Remote GUI, External CDP, Tobor/Twiki, And RustDesk", "status": "DONE", "blocked_by": ["BHWI-E1-T4"], "blocks": [], "spec_reference": "TASKS.md#bhwi-e2-t4-document-remote-gui-external-cdp-tobortwiki-and-rustdesk", "effort_minutes": 60, "validation_commands": ["adversarial review on /private/tmp/bhwi-e2-t4.diff"], "execution": {"validation_status": "PASS", "result_report_path": ".workforce/docs/browser-harness-workforce-integration/PROGRESS.md"}, "review_log": [{"gate": "code_diff", "task_id": "BHWI-E2-T4-doc-review-20260512", "verdict": "APPROVED_WITH_NOTES", "blocking": 0, "material": 6, "nit": 2}]}
+      ]
+    },
+    {
+      "id": "BHWI-E3",
+      "title": "Workforce Skill",
+      "status": "DONE",
+      "tickets": [
+        {"id": "BHWI-E3-T1", "title": "Create browser-automation Workforce Skill", "status": "DONE", "blocked_by": ["BHWI-E1-T4"], "blocks": ["BHWI-E3-T2", "BHWI-E3-T3", "BHWI-E4-T1", "BHWI-E4-T2", "BHWI-E4-T3", "BHWI-E4-T4", "BHWI-E4-T5"], "spec_reference": "TASKS.md#bhwi-e3-t1-create-browser-automation-workforce-skill", "effort_minutes": 75, "validation_commands": ["python3 frontmatter/content validation for workforce-skills/browser-automation/SKILL.md", "adversarial review on /private/tmp/bhwi-e3-t1-r4.diff"], "execution": {"validation_status": "PASS", "result_report_path": ".workforce/docs/browser-harness-workforce-integration/PROGRESS.md"}, "review_log": [{"gate": "code_diff", "task_id": "BHWI-E3-T1-skill-review-r4-20260512", "verdict": "APPROVED_WITH_NOTES", "blocking": 0, "material": 11, "nit": 2}]},
+        {"id": "BHWI-E3-T2", "title": "Validate Skill Discovery", "status": "DONE", "blocked_by": ["BHWI-E3-T1"], "blocks": [], "spec_reference": "TASKS.md#bhwi-e3-t2-validate-skill-discovery", "effort_minutes": 45, "validation_commands": ["symlink skill into ~/.workforce/skills/browser-automation/SKILL.md", "symlink wrapper into ~/.workforce/bin/workforce-browser", "uv tool install -e .", "python3 skill discovery assertions", "PATH=\"$HOME/.workforce/bin:$PATH\" workforce-browser --version", "PATH=\"$HOME/.workforce/bin:$PATH\" workforce-browser doctor"], "execution": {"validation_status": "PASS_WITH_ENV_NOTE", "result_report_path": ".workforce/docs/browser-harness-workforce-integration/artifacts/bhwi-e3-t2-discovery-evidence.md", "preserved_reason": "doctor reached Browser Harness and validated wrapper/env/workspace/bin layers; nonzero exit is due local GUI daemon/browser availability already tracked by BHWI-E2-T1"}, "review_log": [{"gate": "test_plan", "task_id": "BHWI-E3-T2-discovery-review-r2-20260512", "verdict": "APPROVED_WITH_NOTES", "blocking": 0, "material": 0, "nit": 13}]},
+        {"id": "BHWI-E3-T3", "title": "Gate Domain Skill Promotion", "status": "DONE", "blocked_by": ["BHWI-E3-T1"], "blocks": [], "spec_reference": "TASKS.md#bhwi-e3-t3-gate-domain-skill-promotion", "effort_minutes": 60, "validation_commands": ["bash -n scripts/workforce-browser", "temp HOME wrapper default BH_DOMAIN_SKILLS=0 capabilities check", "temp HOME wrapper BH_DOMAIN_SKILLS=1 rejection check"], "execution": {"validation_status": "PASS", "result_report_path": ".workforce/docs/browser-harness-workforce-integration/PROGRESS.md"}, "review_log": [{"gate": "code_diff", "task_id": "BHWI-E3-T3-domain-gate-review-20260512", "verdict": "APPROVED_WITH_NOTES", "blocking": 0, "material": 5, "nit": 4}]}
+      ]
+    },
+    {
+      "id": "BHWI-E4",
+      "title": "Agent Configurations",
+      "status": "DONE",
+      "tickets": [
+        {"id": "BHWI-E4-T1", "title": "Configure Claude", "status": "DONE", "blocked_by": ["BHWI-E3-T1"], "blocks": ["BHWI-E5-T1"], "spec_reference": "TASKS.md#bhwi-e4-t1-configure-claude", "effort_minutes": 30, "execution": {"validation_status": "PASS", "result_report_path": ".workforce/docs/browser-harness-workforce-integration/artifacts/bhwi-e4-agent-config-evidence.md"}},
+        {"id": "BHWI-E4-T2", "title": "Configure Codex", "status": "DONE", "blocked_by": ["BHWI-E3-T1"], "blocks": ["BHWI-E5-T1"], "spec_reference": "TASKS.md#bhwi-e4-t2-configure-codex", "effort_minutes": 30, "execution": {"validation_status": "PASS", "result_report_path": ".workforce/docs/browser-harness-workforce-integration/artifacts/bhwi-e4-agent-config-evidence.md"}},
+        {"id": "BHWI-E4-T3", "title": "Configure Gemini", "status": "DONE", "blocked_by": ["BHWI-E3-T1"], "blocks": ["BHWI-E5-T1"], "spec_reference": "TASKS.md#bhwi-e4-t3-configure-gemini", "effort_minutes": 30, "execution": {"validation_status": "PASS", "result_report_path": ".workforce/docs/browser-harness-workforce-integration/artifacts/bhwi-e4-agent-config-evidence.md"}},
+        {"id": "BHWI-E4-T4", "title": "Configure OpenCode", "status": "DONE", "blocked_by": ["BHWI-E3-T1"], "blocks": ["BHWI-E5-T1"], "spec_reference": "TASKS.md#bhwi-e4-t4-configure-opencode", "effort_minutes": 30, "execution": {"validation_status": "PASS", "result_report_path": ".workforce/docs/browser-harness-workforce-integration/artifacts/bhwi-e4-agent-config-evidence.md"}},
+        {"id": "BHWI-E4-T5", "title": "Configure Hermes Agent", "status": "DONE", "blocked_by": ["BHWI-E3-T1"], "blocks": [], "spec_reference": "TASKS.md#bhwi-e4-t5-configure-hermes-agent", "effort_minutes": 45, "execution": {"validation_status": "PASS_WITH_NOTE", "result_report_path": ".workforce/docs/browser-harness-workforce-integration/artifacts/bhwi-e4-agent-config-evidence.md", "preserved_reason": "Hermes configured through HERMES.md and ~/.hermes/skills/workforce/browser-automation; CLIBridge package import was not required on this host"}}
+      ]
+    },
+    {
+      "id": "BHWI-E5",
+      "title": "Verification",
+      "status": "DONE",
+      "tickets": [
+        {"id": "BHWI-E5-T1", "title": "Add Verification Script", "status": "DONE", "blocked_by": ["BHWI-E4-T1", "BHWI-E4-T2", "BHWI-E4-T3", "BHWI-E4-T4"], "blocks": ["BHWI-E5-T2"], "spec_reference": "TASKS.md#bhwi-e5-t1-add-verification-script", "effort_minutes": 90, "validation_commands": ["bash -n scripts/verify-workforce-browser-setup.sh", "scripts/verify-workforce-browser-setup.sh"], "execution": {"validation_status": "PASS_WITH_ENV_NOTE", "result_report_path": ".workforce/docs/browser-harness-workforce-integration/artifacts/bhwi-e5-t1-verify-setup-output.txt", "preserved_reason": "verifier returned 0 with one warning for known local GUI/profile optional doctor failures"}, "review_log": [{"gate": "code_diff", "task_id": "BHWI-E5-T1-verify-script-review-20260512", "verdict": "APPROVED_WITH_NOTES", "blocking": 0, "material": 10, "nit": 1}]},
+        {"id": "BHWI-E5-T2", "title": "Run Per-Agent Smoke Tests", "status": "DONE", "blocked_by": ["BHWI-E5-T1"], "blocks": ["BHWI-E6-T1"], "spec_reference": "TASKS.md#bhwi-e5-t2-run-per-agent-smoke-tests", "effort_minutes": 90, "validation_commands": ["claude --version", "codex --version", "gemini --version", "opencode --version", "hermes --version", "scripts/verify-workforce-browser-setup.sh"], "execution": {"validation_status": "PASS_WITH_ENV_NOTE", "result_report_path": ".workforce/docs/browser-harness-workforce-integration/artifacts/bhwi-e5-t2-agent-smoke-evidence.md", "preserved_reason": "no agentic model-run smoke was executed; non-agentic CLI presence and shared verification passed"}, "review_log": [{"gate": "test_plan", "task_id": "BHWI-E5-T2-agent-smoke-review-20260512", "verdict": "APPROVED_WITH_NOTES", "blocking": 0, "material": 0, "nit": 10}]}
+      ]
+    },
+    {
+      "id": "BHWI-E6",
+      "title": "Rollout And Maintenance",
+      "status": "DONE",
+      "tickets": [
+        {"id": "BHWI-E6-T1", "title": "Capture Rollout Evidence", "status": "DONE", "blocked_by": ["BHWI-E5-T2"], "blocks": ["BHWI-E6-T2"], "spec_reference": "TASKS.md#bhwi-e6-t1-capture-rollout-evidence", "effort_minutes": 60, "execution": {"validation_status": "PASS", "result_report_path": ".workforce/docs/browser-harness-workforce-integration/ROLLOUT.md"}},
+        {"id": "BHWI-E6-T2", "title": "Add Maintenance And Rollback Docs", "status": "DONE", "blocked_by": ["BHWI-E6-T1"], "blocks": [], "spec_reference": "TASKS.md#bhwi-e6-t2-add-maintenance-and-rollback-docs", "effort_minutes": 60, "execution": {"validation_status": "PASS", "result_report_path": ".workforce/docs/browser-harness-workforce-integration/ROLLOUT.md"}, "review_log": [{"gate": "code_diff", "task_id": "BHWI-E6-rollout-review-20260512", "verdict": "APPROVED_WITH_NOTES", "blocking": 0, "material": 3, "nit": 2}]}
+      ]
+    }
+  ]
+}

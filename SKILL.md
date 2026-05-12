@@ -57,6 +57,22 @@ start_remote_daemon prints liveUrl and auto-opens it in the local browser (if a 
 
 Profiles (cookies-only login state) live in interaction-skills/profile-sync.md — covers list_cloud_profiles(), the chat-driven "which profile?" pattern, and sync_local_profile() for uploading a local Chrome profile.
 
+### Workforce wrapper
+
+When this repo is installed through Workforce, prefer `workforce-browser` over calling `browser-harness` directly. The wrapper loads `~/.workforce/browser-harness.env`, validates the selected mode, and delegates to this CLI.
+
+Common commands:
+
+```bash
+workforce-browser doctor
+workforce-browser run 'print(page_info())'
+workforce-browser headless status
+```
+
+`remote-gui`, Tobor, and Twiki support is host-local: the repo, wrapper, env file, PATH, and CDP/browser smoke test must pass on the target host itself. RustDesk is only for human GUI inspection or repair; automation still goes through CDP.
+
+Workforce keeps domain-skill mutation disabled. `workforce-browser` fails closed if `BH_DOMAIN_SKILLS=1` until a reviewed promotion command exists.
+
 ## Interaction skills
 
 If you start struggling with a specific mechanic while navigating, look in interaction-skills/ for helpers. They cover reusable UI mechanics like dialogs, tabs, dropdowns, iframes, and uploads. The available interaction skills are:

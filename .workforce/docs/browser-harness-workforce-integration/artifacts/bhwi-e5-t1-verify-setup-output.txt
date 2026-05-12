@@ -1,0 +1,77 @@
+Browser Harness Workforce setup verification
+repo_root=/Users/mattheller/Projects/BrowserHarness
+[PASS] file exists: /Users/mattheller/Projects/BrowserHarness/workforce-skills/browser-automation/SKILL.md
+[PASS] file exists: /Users/mattheller/Projects/BrowserHarness/scripts/workforce-browser
+[PASS] /Users/mattheller/Projects/BrowserHarness/workforce-skills/browser-automation/SKILL.md contains: name: browser-automation
+[PASS] /Users/mattheller/Projects/BrowserHarness/workforce-skills/browser-automation/SKILL.md contains: workforce-browser doctor
+[PASS] /Users/mattheller/Projects/BrowserHarness/workforce-skills/browser-automation/SKILL.md contains: BH_DOMAIN_SKILLS=0
+[PASS] directory exists: /Users/mattheller/.workforce
+[PASS] file exists: /Users/mattheller/.workforce/browser-harness.env
+[PASS] /Users/mattheller/.workforce/bin/workforce-browser -> /Users/mattheller/Projects/BrowserHarness/scripts/workforce-browser
+[PASS] /Users/mattheller/.workforce/skills/browser-automation/SKILL.md -> /Users/mattheller/Projects/BrowserHarness/workforce-skills/browser-automation/SKILL.md
+[PASS] file exists: /Users/mattheller/.claude/CLAUDE.md
+[PASS] /Users/mattheller/.claude/skills/browser-automation/SKILL.md resolves to /Users/mattheller/Projects/BrowserHarness/workforce-skills/browser-automation/SKILL.md
+[PASS] file exists: /Users/mattheller/.claude/skills/browser-automation/SKILL.md
+[PASS] /Users/mattheller/.claude/CLAUDE.md contains: BROWSER-HARNESS-WORKFORCE
+[PASS] /Users/mattheller/.claude/CLAUDE.md contains: workforce-browser doctor
+[PASS] /Users/mattheller/.claude/CLAUDE.md contains: Keep `BH_DOMAIN_SKILLS=0`
+[PASS] /Users/mattheller/.claude/CLAUDE.md contains: fails closed if domain-skill mutation is enabled
+[PASS] file exists: /Users/mattheller/.codex/AGENTS.md
+[PASS] /Users/mattheller/.codex/skills/browser-automation/SKILL.md resolves to /Users/mattheller/Projects/BrowserHarness/workforce-skills/browser-automation/SKILL.md
+[PASS] file exists: /Users/mattheller/.codex/skills/browser-automation/SKILL.md
+[PASS] /Users/mattheller/.codex/AGENTS.md contains: BROWSER-HARNESS-WORKFORCE
+[PASS] /Users/mattheller/.codex/AGENTS.md contains: workforce-browser doctor
+[PASS] /Users/mattheller/.codex/AGENTS.md contains: Keep `BH_DOMAIN_SKILLS=0`
+[PASS] /Users/mattheller/.codex/AGENTS.md contains: fails closed if domain-skill mutation is enabled
+[PASS] file exists: /Users/mattheller/.gemini/GEMINI.md
+[PASS] /Users/mattheller/.gemini/skills/browser-automation/SKILL.md resolves to /Users/mattheller/Projects/BrowserHarness/workforce-skills/browser-automation/SKILL.md
+[PASS] file exists: /Users/mattheller/.gemini/skills/browser-automation/SKILL.md
+[PASS] /Users/mattheller/.gemini/GEMINI.md contains: BROWSER-HARNESS-WORKFORCE
+[PASS] /Users/mattheller/.gemini/GEMINI.md contains: workforce-browser doctor
+[PASS] /Users/mattheller/.gemini/GEMINI.md contains: Keep `BH_DOMAIN_SKILLS=0`
+[PASS] /Users/mattheller/.gemini/GEMINI.md contains: fails closed if domain-skill mutation is enabled
+[PASS] file exists: /Users/mattheller/.config/opencode/AGENTS.md
+[PASS] /Users/mattheller/.config/opencode/skills/browser-automation/SKILL.md resolves to /Users/mattheller/Projects/BrowserHarness/workforce-skills/browser-automation/SKILL.md
+[PASS] file exists: /Users/mattheller/.config/opencode/skills/browser-automation/SKILL.md
+[PASS] /Users/mattheller/.config/opencode/AGENTS.md contains: BROWSER-HARNESS-WORKFORCE
+[PASS] /Users/mattheller/.config/opencode/AGENTS.md contains: workforce-browser doctor
+[PASS] /Users/mattheller/.config/opencode/AGENTS.md contains: Keep `BH_DOMAIN_SKILLS=0`
+[PASS] /Users/mattheller/.config/opencode/AGENTS.md contains: fails closed if domain-skill mutation is enabled
+[PASS] file exists: /Users/mattheller/.hermes/HERMES.md
+[PASS] /Users/mattheller/.hermes/skills/workforce/browser-automation/SKILL.md resolves to /Users/mattheller/Projects/BrowserHarness/workforce-skills/browser-automation/SKILL.md
+[PASS] file exists: /Users/mattheller/.hermes/skills/workforce/browser-automation/SKILL.md
+[PASS] /Users/mattheller/.hermes/HERMES.md contains: BROWSER-HARNESS-WORKFORCE
+[PASS] /Users/mattheller/.hermes/HERMES.md contains: workforce-browser doctor
+[PASS] /Users/mattheller/.hermes/HERMES.md contains: Keep `BH_DOMAIN_SKILLS=0`
+[PASS] /Users/mattheller/.hermes/HERMES.md contains: fails closed if domain-skill mutation is enabled
+[PASS] workforce-browser resolves to /Users/mattheller/.workforce/bin/workforce-browser
+[PASS] browser-harness resolves to /Users/mattheller/.local/bin/browser-harness
+[PASS] workforce-browser --version: 0.1.0
+[PASS] capability present: run
+[PASS] capability present: headless start
+[PASS] capability present: headless status
+[PASS] capability present: headless stop
+[PASS] capability present: headless cleanup
+[PASS] BH_DOMAIN_SKILLS=1 fails closed
+workforce-browser doctor
+  [ok] env file           /Users/mattheller/.workforce/browser-harness.env
+  [ok] mode               local
+  [ok] workspace          /Users/mattheller/.workforce/browser-agent-workspace
+  [ok] domain skills      /Users/mattheller/.workforce/browser-agent-workspace/domain-skills
+  [ok] interaction skills /Users/mattheller/.workforce/browser-agent-workspace/interaction-skills
+  [ok] test results       /Users/mattheller/.workforce/test-results/browser-harness
+  [ok] state dir          /Users/mattheller/.workforce/state/browser-harness
+  [ok] log dir            /Users/mattheller/.workforce/logs/browser-harness
+  [ok] browser-harness    /Users/mattheller/.local/bin/browser-harness
+browser-harness doctor
+  platform          Darwin 24.6.0
+  python            3.11.15
+  version           0.1.0 (git)
+  latest release    (could not reach github)
+  [ok  ] chrome running
+  [FAIL] daemon alive — see install.md
+  [FAIL] active browser connections — 0
+  [FAIL] profile-use installed — optional: curl -fsSL https://browser-use.com/profile.sh | sh
+  [FAIL] BROWSER_USE_API_KEY set — optional: needed only for cloud browsers / profile sync
+[WARN] workforce-browser doctor exited 1 with only known local GUI/profile optional failures
+summary: failures=0 warnings=1
