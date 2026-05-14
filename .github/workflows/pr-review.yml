@@ -1,6 +1,7 @@
 name: AI PR Review
 # Generated from Workforce PR Review Gate Adoption Registry.
 # review_profile: claude-sonnet
+# runtime_channel: pr-review-gate-v1
 
 on:
   pull_request:
@@ -9,7 +10,7 @@ on:
 
 jobs:
   review:
-    uses: Bad-Robots/Workforce/.github/workflows/pr-review.yml@54d417d2003da3c03af0a600e2c5e66c3e6b6323
+    uses: Bad-Robots/Workforce/.github/workflows/pr-review.yml@d43c66049d000eacd4ba8f2febde5133533606fd
     permissions:
       pull-requests: write
       contents: read
@@ -22,11 +23,14 @@ jobs:
       repo_context: ''
       coding_rules: ''
       focus_file_patterns: ''
-      workforce_runtime_ref: main
-      workforce_runtime_sha: 54d417d2003da3c03af0a600e2c5e66c3e6b6323
+      # Release channel ref used only to verify the immutable runtime SHA still resolves as approved.
+      workforce_runtime_ref: pr-review-gate-v1
+      # Authoritative runtime pin; the reusable workflow checks out this exact commit.
+      workforce_runtime_sha: d43c66049d000eacd4ba8f2febde5133533606fd
       is_reusable_call: true
       is_fork_pr: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
-      secret_scope_repos: Bad-Robots/BrowserHarness
+      # Exact caller repository allowlist; the callee rejects mismatches before secret-bearing steps.
+      secret_scope_repos: ${{ github.repository }}
     secrets:
       CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
       CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
