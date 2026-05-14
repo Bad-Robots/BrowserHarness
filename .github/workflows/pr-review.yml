@@ -9,7 +9,7 @@ on:
 
 jobs:
   review:
-    uses: Bad-Robots/Workforce/.github/workflows/pr-review.yml@main
+    uses: Bad-Robots/Workforce/.github/workflows/pr-review.yml@54d417d2003da3c03af0a600e2c5e66c3e6b6323
     permissions:
       pull-requests: write
       contents: read
@@ -23,7 +23,7 @@ jobs:
       coding_rules: ''
       focus_file_patterns: ''
       workforce_runtime_ref: main
-      workforce_runtime_sha: 231b53a719ac4f82411c79c5d18131ea5f7ae0be
+      workforce_runtime_sha: 54d417d2003da3c03af0a600e2c5e66c3e6b6323
       is_reusable_call: true
       is_fork_pr: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
       secret_scope_repos: Bad-Robots/BrowserHarness
