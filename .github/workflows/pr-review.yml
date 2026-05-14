@@ -1,0 +1,34 @@
+name: AI PR Review
+# Generated from Workforce PR Review Gate Adoption Registry.
+# review_profile: claude-sonnet
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize]
+
+jobs:
+  review:
+    uses: Bad-Robots/Workforce/.github/workflows/pr-review.yml@v1
+    permissions:
+      pull-requests: write
+      contents: read
+    with:
+      pr_number: ${{ github.event.pull_request.number }}
+      pr_title: ${{ github.event.pull_request.title }}
+      pr_body: ${{ github.event.pull_request.body || '' }}
+      pr_author: ${{ github.event.pull_request.user.login }}
+      base_ref: ${{ github.event.pull_request.base.ref }}
+      repo_context: ''
+      coding_rules: ''
+      focus_file_patterns: ''
+      workforce_runtime_ref: v1
+      workforce_runtime_sha: c49793c9689762cc6d116672bdc977ed30103de9
+      is_reusable_call: true
+      is_fork_pr: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
+      secret_scope_repos: Bad-Robots/BrowserHarness
+    secrets:
+      CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+      CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+      BYPASS_API_KEY: ${{ secrets.BYPASS_API_KEY }}
+      WORKFORCE_RUNTIME_TOKEN: ${{ secrets.WORKFORCE_RUNTIME_TOKEN }}
