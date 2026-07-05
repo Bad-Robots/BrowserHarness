@@ -1,7 +1,9 @@
 name: AI PR Review
-# Generated from Workforce PR Review Gate Adoption Registry.
-# review_profile: claude-sonnet
-# runtime_channel: pr-review-gate-v11
+# Gen-2: cut over to the Critique service (ADR-0008). Replaces the CLIBridge
+# reusable pr-review.yml. Critique builds the ReviewRequest from the PR diff
+# inline, resolves reviewer routes server-side, and the gate fails closed on a
+# blocked verdict (8.0 overall pass floor, per-dimension floor 6). Auth is the
+# bypass gateway API key only.
 
 on:
   pull_request:
@@ -10,31 +12,12 @@ on:
 
 jobs:
   review:
-    uses: Bad-Robots/Workforce/.github/workflows/pr-review.yml@a043eb7f12f9e598073785035e93249bfc0ddc9f
+    uses: Bad-Robots/Workforce/.github/workflows/pr-review-critique.yml@b943ecfe61831ce58bbc434ff16f7730d12df918
     permissions:
       pull-requests: write
       contents: read
     with:
       runner_labels: '["self-hosted","linux","ARM64","badrobots-aipr"]'
       pr_number: ${{ github.event.pull_request.number }}
-      pr_title: ${{ github.event.pull_request.title }}
-      pr_body: ${{ github.event.pull_request.body || '' }}
-      pr_author: ${{ github.event.pull_request.user.login }}
-      base_ref: ${{ github.event.pull_request.base.ref }}
-      repo_context: ''
-      coding_rules: ''
-      focus_file_patterns: ''
-      # Release channel ref used only to verify the immutable runtime SHA still resolves as approved.
-      workforce_runtime_ref: pr-review-gate-v11
-      # Authoritative runtime pin; the reusable workflow checks out this exact commit.
-      workforce_runtime_sha: a043eb7f12f9e598073785035e93249bfc0ddc9f
-      is_reusable_call: true
-      is_fork_pr: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
-      # Exact caller repository allowlist; the callee rejects mismatches before secret-bearing steps.
-      secret_scope_repos: ${{ github.repository }}
     secrets:
-      CLIBRIDGE_ADMIN_TOKEN: ${{ secrets.CLIBRIDGE_ADMIN_TOKEN }}
-      CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
-      CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
       BYPASS_API_KEY: ${{ secrets.BYPASS_API_KEY }}
-      WORKFORCE_RUNTIME_TOKEN: ${{ secrets.WORKFORCE_RUNTIME_TOKEN }}
