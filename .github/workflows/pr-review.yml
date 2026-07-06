@@ -12,7 +12,7 @@ on:
 
 jobs:
   review:
-    uses: Bad-Robots/Workforce/.github/workflows/pr-review-critique.yml@b943ecfe61831ce58bbc434ff16f7730d12df918
+    uses: Bad-Robots/Workforce/.github/workflows/pr-review-critique.yml@5ac1b6a660ea73607bdff00266f56b1c58fa2a5e
     permissions:
       pull-requests: write
       contents: read
