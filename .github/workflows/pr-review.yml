@@ -1,24 +1,412 @@
 name: AI PR Review
-# Gen-2: cut over to the Critique service (ADR-0008). Replaces the CLIBridge
-# reusable pr-review.yml. Critique builds the ReviewRequest from the PR diff
-# inline, resolves reviewer routes server-side, and the gate fails closed on a
-# blocked verdict (8.0 overall pass floor, per-dimension floor 6). Auth is the
-# bypass gateway API key only.
+# workforce-public-pr-review-critique caller: v1.0
+#
+# This public repo cannot call Bad-Robots/Workforce private reusable
+# workflows under GitHub Actions access policy. This self-contained
+# caller is generated from the canonical Workforce pr-review-critique workflow.
 
 on:
   pull_request:
     branches: [main]
     types: [opened, synchronize]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  review:
-    if: github.event_name != 'pull_request' && github.event_name != 'pull_request_target' || github.event.pull_request.head.repo.full_name == github.repository
-    uses: Bad-Robots/Workforce/.github/workflows/pr-review-critique.yml@a980e2243473e2aeac4ea0ed5f356929081d0607
+  critique-review:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, linux, ARM64, badrobots-aipr]
+    timeout-minutes: 60
     permissions:
       pull-requests: write
       contents: read
-    with:
-      runner_labels: '["self-hosted","linux","ARM64","badrobots-aipr"]'
-      pr_number: ${{ github.event.pull_request.number }}
-    secrets:
-      BYPASS_API_KEY: ${{ secrets.BYPASS_API_KEY }}
+    env:
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      # Passed through env (not inline in run:) per Actions injection hygiene.
+      REVIEW_REQUIRED: true
+      # Hardcoded: callers must not be able to redirect review traffic to an
+      # attacker-controlled endpoint.
+      CRITIQUE_BASE: https://bypass.badrobots.net/critique
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Validate inputs and secret
+        env:
+          BYPASS_API_KEY: ${{ secrets.BYPASS_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::pr_number must be a positive integer"; exit 1
+          fi
+          if [ -z "${BYPASS_API_KEY:-}" ]; then
+            echo "::error::BYPASS_API_KEY secret is required"; exit 1
+          fi
+
+      - name: Build Critique ReviewRequest
+        id: build
+        env:
+          # Workforce#277: the GitHub actor that opened the PR (non-head-editable)
+          # and the caller-supplied actor->coding-agent map. Passed via env (never
+          # interpolated into shell/python source) per Actions injection hygiene.
+          ACTOR_LOGIN: ${{ github.event.pull_request.user.login || github.actor }}
+          ACTOR_AGENT_MAP: '{}'
+        run: |
+          set -euo pipefail
+          # PR metadata first; the unified diff is produced locally from the
+          # exact base/head SHAs below. Do not use GitHub's whole-PR diff media
+          # endpoint here: large PRs hit GitHub's 20k-line HTTP 406 limit before
+          # Critique can produce a typed review result (Critique#176).
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" > /tmp/pr-meta.json
+          # Fork guard: this workflow uses secrets + write perms; never run it for
+          # a PR whose head is a fork of the base repo.
+          HEAD_REPO=$(jq -r '.head.repo.full_name // ""' /tmp/pr-meta.json)
+          if [ "$HEAD_REPO" != "$GITHUB_REPOSITORY" ]; then
+            echo "::error::Critique review does not run for fork PRs (head repo '${HEAD_REPO}' != '${GITHUB_REPOSITORY}')"
+            exit 1
+          fi
+          HEAD_SHA=$(jq -r '.head.sha' /tmp/pr-meta.json)
+          BASE_SHA=$(jq -r '.base.sha' /tmp/pr-meta.json)
+          BASE_REF=$(jq -r '.base.ref // ""' /tmp/pr-meta.json)
+          HEAD_REF=$(jq -r '.head.ref // ""' /tmp/pr-meta.json)
+          if [[ ! "$HEAD_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "::error::PR head sha is not a 40-char hex git SHA: ${HEAD_SHA}"; exit 1
+          fi
+          if [[ ! "$BASE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "::error::PR base sha is not a 40-char hex git SHA: ${BASE_SHA}"; exit 1
+          fi
+          if [ -z "$BASE_REF" ]; then
+            echo "::error::PR base ref is missing from GitHub metadata"; exit 1
+          fi
+          if ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+            git fetch --no-tags --depth=1 origin "$BASE_SHA" >/dev/null 2>&1 \
+              || git fetch --no-tags origin "$BASE_REF" >/dev/null 2>&1 \
+              || true
+          fi
+          if ! git cat-file -e "${HEAD_SHA}^{commit}" 2>/dev/null; then
+            git fetch --no-tags --depth=1 origin "$HEAD_SHA" >/dev/null 2>&1 \
+              || { [ -n "$HEAD_REF" ] && git fetch --no-tags origin "$HEAD_REF" >/dev/null 2>&1; } \
+              || true
+          fi
+          if ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+            echo "::error::Could not fetch PR base commit ${BASE_SHA}"; exit 1
+          fi
+          if ! git cat-file -e "${HEAD_SHA}^{commit}" 2>/dev/null; then
+            echo "::error::Could not fetch PR head commit ${HEAD_SHA}"; exit 1
+          fi
+          # Diff from the MERGE BASE, not the base ref head (Critique#171 root
+          # cause / Workforce#311 false positives): a two-dot diff against the
+          # CURRENT base head misattributes every upstream commit a stale
+          # branch is missing as a REVERSION by the PR — reviewers then flag
+          # phantom mass-deletions. GitHub's compare API supplies the merge
+          # base without needing local history on a shallow clone; fall back
+          # to BASE_SHA (old behavior) if it can't be resolved/fetched.
+          MERGE_BASE=$(gh api "repos/${GITHUB_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}" \
+            --jq '.merge_base_commit.sha // ""' 2>/tmp/merge-base-err.txt || true)
+          if [ -z "$MERGE_BASE" ] && [ -s /tmp/merge-base-err.txt ]; then
+            # Make API failures distinguishable from a genuine no-merge-base
+            # in logs — silent fallback here is exactly how a wrong-diff bug
+            # stays invisible (review suggestion on Workforce#313).
+            echo "::warning::merge-base lookup failed; falling back to base head diff: $(head -c 200 /tmp/merge-base-err.txt)"
+          fi
+          DIFF_BASE="$BASE_SHA"
+          if [[ "$MERGE_BASE" =~ ^[0-9a-fA-F]{40}$ ]] && [ "$MERGE_BASE" != "$BASE_SHA" ]; then
+            git cat-file -e "${MERGE_BASE}^{commit}" 2>/dev/null \
+              || git fetch --no-tags --depth=1 origin "$MERGE_BASE" >/dev/null 2>&1 || true
+            if git cat-file -e "${MERGE_BASE}^{commit}" 2>/dev/null; then
+              DIFF_BASE="$MERGE_BASE"
+              echo "diffing from merge base ${MERGE_BASE} (branch is behind base head ${BASE_SHA})"
+            fi
+          fi
+          git diff --no-ext-diff --binary "$DIFF_BASE" "$HEAD_SHA" > /tmp/pr.diff
+          git diff --no-ext-diff --name-only "$DIFF_BASE" "$HEAD_SHA" > /tmp/pr-files.txt
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          # HEAD commit message -> a file the builder reads (never interpolated
+          # into shell). HEAD_SHA is validated 40-hex above; GITHUB_REPOSITORY is
+          # the trusted running repo.
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}" \
+            --jq '.commit.message' > /tmp/head-commit-msg.txt 2>/dev/null \
+            || : > /tmp/head-commit-msg.txt
+          python3 - "$GITHUB_REPOSITORY" "$PR_NUMBER" <<'PY'
+          import json, os, re, sys
+
+          def _read_json_str(raw):
+              if not raw:
+                  return None
+              try:
+                  return json.loads(raw)
+              except (ValueError, TypeError):
+                  return None
+
+          def _read_json_file(path):
+              try:
+                  with open(path, encoding="utf-8") as fh:
+                      return json.load(fh)
+              except (OSError, ValueError):
+                  return None
+
+          repo, pr = sys.argv[1], sys.argv[2]
+          meta = json.load(open("/tmp/pr-meta.json"))
+          diff = open("/tmp/pr.diff", encoding="utf-8", errors="replace").read()
+          files = [l.strip() for l in open("/tmp/pr-files.txt") if l.strip()]
+          body = meta.get("body") or ""
+          try:
+              commit_msg = open("/tmp/head-commit-msg.txt", encoding="utf-8",
+                                errors="replace").read()
+          except OSError:
+              commit_msg = ""
+
+          # Coding-Agent: <provider>/<model> trailer -> coding_agent, the coder
+          # identity for the reviewer-independence gate (Critique#158). Precedence:
+          #   1. HEAD commit trailer  (set at commit time; not PR-body-editable)
+          #   2. PR-body trailer      (compat fallback)
+          #   3. actor-map            (Workforce#277): map the GitHub actor login
+          #      -> provider/model. The actor (account/App that opened the PR) is
+          #      NOT head-controllable, so it is a usable trust signal when no
+          #      trailer is present (e.g. a codegen App that never writes trailers).
+          #   4. human-authored       (no AI coder -> any AI reviewer is trivially
+          #      independent -> Critique resolves independence VERIFIED, not
+          #      "unverified").
+          def _actor_agent_map():
+              # Merge an optional checked-in map with the caller-supplied input.
+              # The checked-in file is applied first; the workflow input overlays
+              # (and thus overrides) it. Both are best-effort: malformed JSON or a
+              # non-object is ignored rather than failing the review build.
+              merged = {}
+              for src in (
+                  _read_json_file(".github/ai-pr-review/actor-coding-agent-map.json"),
+                  _read_json_str(os.environ.get("ACTOR_AGENT_MAP")),
+              ):
+                  if isinstance(src, dict):
+                      merged.update(src)
+              return merged
+
+          actor = (os.environ.get("ACTOR_LOGIN") or "").strip()
+          agent_map = _actor_agent_map()
+          _TRAILER = re.compile(r"(?im)^\s*Coding-Agent:\s*([^\s/]+)/([^\s]+)\s*$")
+          mc, mb = _TRAILER.search(commit_msg), _TRAILER.search(body)
+          mapped = agent_map.get(actor) if actor else None
+          if mc:
+              coding_agent = {"provider": mc.group(1), "model": mc.group(2), "source": "commit-trailer"}
+          elif mb:
+              coding_agent = {"provider": mb.group(1), "model": mb.group(2), "source": "pr-trailer"}
+          elif isinstance(mapped, str) and "/" in mapped:
+              prov, _, mod = mapped.partition("/")
+              prov, mod = prov.strip(), mod.strip()
+              if prov and mod:
+                  coding_agent = {"provider": prov, "model": mod, "source": "actor-map"}
+              else:
+                  coding_agent = {"provider": "human", "model": "human", "source": "human-default"}
+          else:
+              coding_agent = {"provider": "human", "model": "human", "source": "human-default"}
+
+          # Gate enforcement is a branch/repo POLICY (Critique#158), decoupled from
+          # who authored: required unless the caller explicitly passes false.
+          review_required = str(os.environ.get("REVIEW_REQUIRED", "")).strip().lower() != "false"
+
+          req = {
+              "pr_title": (meta.get("title") or "")[:1024],
+              "pr_description": body[:65000],
+              "pr_author": (meta.get("user") or {}).get("login") or "unknown",
+              "base_branch": (meta.get("base") or {}).get("ref") or "main",
+              # pr_number enables Critique's incremental re-review (#131):
+              # unchanged per-file diffs reuse the prior head's reviews.
+              "pr_number": int(meta["number"]),
+              "head_sha": meta["head"]["sha"],
+              "diff": diff,
+              "changed_files": files,
+              "review_required": review_required,
+              "coding_agent": coding_agent,
+              "review_skill": "critique-pr-review",
+              "review_skill_version": "v1.0",
+          }
+          json.dump(req, open("/tmp/review-request.json", "w"))
+          print(f"built ReviewRequest: {len(files)} files, {len(diff)} diff bytes, "
+                f"review_required={review_required}, "
+                f"coding_agent={coding_agent['provider']}/{coding_agent['model']} "
+                f"({coding_agent['source']})")
+          PY
+
+      - name: Create Critique review job
+        id: create
+        env:
+          BYPASS_API_KEY: ${{ secrets.BYPASS_API_KEY }}
+          HEAD_SHA: ${{ steps.build.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          IDEM=$(printf '%s:%s:%s' "$GITHUB_REPOSITORY" "$PR_NUMBER" "$HEAD_SHA" \
+            | sha256sum | cut -c1-64)
+          CODE=$(curl -sS --http1.1 -o /tmp/create.json -w '%{http_code}' \
+            -X POST "${CRITIQUE_BASE}/review/jobs" \
+            -H "Content-Type: application/json" \
+            -H "X-API-Key: ${BYPASS_API_KEY}" \
+            -H "X-Repo: ${GITHUB_REPOSITORY}" \
+            -H "Idempotency-Key: ${IDEM}" \
+            --data @/tmp/review-request.json --max-time 60) || {
+              echo "::error::Critique job create failed before a valid HTTP response"; exit 1; }
+          echo "create http=$CODE"; cat /tmp/create.json; echo
+          if [ "$CODE" != "202" ] && [ "$CODE" != "200" ]; then
+            # Bad-Robots/Critique#175: surface the structured refusal instead of a
+            # bare status code — a 409 reviewer_independence_violation looked like
+            # an infra conflict and cost a multi-hour misdiagnosis (2026-07-06).
+            # The body is Critique's own sanitized error contract; truncate for
+            # annotation hygiene and fall back to raw text when it isn't JSON.
+            DETAIL=$(jq -r '[.error_code // empty, (.comment // .detail // empty)] | join(": ")' /tmp/create.json 2>/dev/null || true)
+            if [ -z "$DETAIL" ]; then DETAIL=$(head -c 300 /tmp/create.json | tr '\n' ' '); fi
+            echo "::error::Critique job create returned HTTP $CODE — ${DETAIL:0:600}"; exit 1
+          fi
+          JOB_ID=$(jq -r '.job_id // ""' /tmp/create.json)
+          if [ -z "$JOB_ID" ]; then echo "::error::no job_id in response"; exit 1; fi
+          echo "job_id=$JOB_ID" >> "$GITHUB_OUTPUT"
+          echo "Critique review job: $JOB_ID" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Poll Critique review job
+        id: poll
+        env:
+          BYPASS_API_KEY: ${{ secrets.BYPASS_API_KEY }}
+          JOB_ID: ${{ steps.create.outputs.job_id }}
+        run: |
+          set -euo pipefail
+          # The worker stays responsive during a review; the GATEWAY can drop the
+          # odd poll, so tolerate consecutive transient failures rather than aborting.
+          INTERVAL=10; MAX_POLLS=300; FAIL_LIMIT=10; fails=0
+          POLL_START=$(date -u +%s)
+          LAST_STATUS=""
+          LAST_PHASE=""
+          LAST_PHASE_AGE=""
+          LAST_QUEUE_POS=""
+          LAST_QUEUE_WAIT=""
+          # epoch_of TIMESTAMP: convert an ISO-8601 timestamp from the job API to
+          # epoch seconds, or print nothing if absent/unparseable. Job-API fields
+          # are data we print, never code we evaluate.
+          epoch_of() {
+            local ts="$1"
+            if [ -z "$ts" ]; then return 0; fi
+            date -u -d "$ts" +%s 2>/dev/null || true
+          }
+          for i in $(seq 1 $MAX_POLLS); do
+            CODE=$(curl -sS --http1.1 -o /tmp/status.json -w '%{http_code}' \
+              -X GET "${CRITIQUE_BASE}/review/jobs/${JOB_ID}" \
+              -H "X-API-Key: ${BYPASS_API_KEY}" --max-time 30) || CODE=000
+            if [ "$CODE" != "200" ]; then
+              fails=$((fails+1))
+              if [ "$fails" -gt "$FAIL_LIMIT" ]; then
+                echo "::error::Critique status poll failed ${fails}x consecutively (last http=$CODE)"; exit 1
+              fi
+              echo "transient poll failure ${fails}/${FAIL_LIMIT} (http=$CODE); retrying"
+              sleep "$INTERVAL"; continue
+            fi
+            fails=0
+            ST=$(jq -r '.status // ""' /tmp/status.json)
+            LAST_STATUS="$ST"
+            # Progress fields, live since Critique 0.3.1 (set_phase wiring). All
+            # `// empty` guarded: older servers simply omit them and we fall back
+            # to today's status-only line.
+            PHASE=$(jq -r '.phase // empty' /tmp/status.json)
+            PHASE_STARTED_AT=$(jq -r '.phase_started_at // empty' /tmp/status.json)
+            QUEUED_AT=$(jq -r '.queued_at // empty' /tmp/status.json)
+            QUEUE_POSITION=$(jq -r '.queue_position // empty' /tmp/status.json)
+            QUEUE_WAIT_SECONDS=$(jq -r '.queue_wait_seconds // empty' /tmp/status.json)
+            NOW=$(date -u +%s)
+            PHASE_AGE=""
+            if [ -n "$PHASE_STARTED_AT" ]; then
+              PS_EPOCH=$(epoch_of "$PHASE_STARTED_AT")
+              if [ -n "$PS_EPOCH" ]; then PHASE_AGE=$((NOW - PS_EPOCH)); fi
+            fi
+            QUEUED_AGE=""
+            if [ -n "$QUEUED_AT" ]; then
+              QA_EPOCH=$(epoch_of "$QUEUED_AT")
+              if [ -n "$QA_EPOCH" ]; then QUEUED_AGE=$((NOW - QA_EPOCH)); fi
+            fi
+            LINE="poll $i: status=$ST"
+            if [ "$ST" = "queued" ]; then
+              if [ -n "$QUEUE_POSITION" ]; then LINE="$LINE queue_position=$QUEUE_POSITION"; fi
+              if [ -n "$QUEUED_AGE" ]; then LINE="$LINE queued_age=${QUEUED_AGE}s"; fi
+            elif [ -n "$PHASE" ]; then
+              LINE="$LINE phase=$PHASE"
+              if [ -n "$PHASE_AGE" ]; then LINE="$LINE phase_age=${PHASE_AGE}s"; fi
+            fi
+            echo "$LINE"
+            if [ -n "$PHASE" ]; then
+              if [ -n "$LAST_PHASE" ] && [ "$PHASE" != "$LAST_PHASE" ]; then
+                ELAPSED=$((NOW - POLL_START))
+                echo "phase: $LAST_PHASE -> $PHASE after ${ELAPSED}s"
+              fi
+              LAST_PHASE="$PHASE"
+              LAST_PHASE_AGE="$PHASE_AGE"
+            fi
+            LAST_QUEUE_POS="$QUEUE_POSITION"
+            LAST_QUEUE_WAIT="$QUEUE_WAIT_SECONDS"
+            case "$ST" in
+              complete) cp /tmp/status.json /tmp/result.json; break ;;
+              failed)
+                echo "::error::Critique review job failed: $(jq -r '.error // "unknown"' /tmp/status.json)"
+                exit 1 ;;
+              queued|running) ;;
+              *) echo "::error::unexpected job status: ${ST:-missing}"; exit 1 ;;
+            esac
+            if [ "$i" -eq "$MAX_POLLS" ]; then
+              PHASE_AGE_DISP="${LAST_PHASE_AGE:+${LAST_PHASE_AGE}s}"
+              echo "::error::timed out waiting for Critique job ${JOB_ID} (last status=${LAST_STATUS:-unknown}, phase=${LAST_PHASE:-unknown}, phase_age=${PHASE_AGE_DISP:-unknown}, queue_position=${LAST_QUEUE_POS:-n/a}, queue_wait_seconds=${LAST_QUEUE_WAIT:-n/a})"
+              exit 1
+            fi
+            sleep "$INTERVAL"
+          done
+
+      - name: Render verdict and post comment
+        env:
+          JOB_ID: ${{ steps.create.outputs.job_id }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, subprocess, sys
+          if not os.path.exists("/tmp/result.json"):
+              print("::error::no review result file; poll did not reach a terminal verdict")
+              sys.exit(1)
+          d = json.load(open("/tmp/result.json"))
+          if d.get("status") != "complete":
+              print(f"::error::review job not complete (status={d.get('status')})")
+              sys.exit(1)
+          r = d.get("result") or {}
+          rsc = d.get("result_status_code")
+          verdict = r.get("verdict")
+          ind = r.get("reviewer_independence") or {}
+          findings = r.get("findings") or []
+          # Critique renders the full scored comment itself (FR-9): Score X/10 + the
+          # 5-row dimension table + Blocking/Suggestions + coverage + the appended
+          # independence block. Post it verbatim. Fall back to a minimal verdict line
+          # only if a deployed build predates review_comment.
+          body = r.get("review_comment") or (
+              f"## Critique AI PR Review — **{verdict or 'no verdict'}**\n\n"
+              "_(no rendered comment in result; deployed Critique build may predate FR-9)_")
+          marker = "<!-- critique-pr-review -->"
+          open("/tmp/comment.md", "w").write(marker + "\n" + body)
+          repo = os.environ["GITHUB_REPOSITORY"]; pr = os.environ["PR_NUMBER"]
+          # Upsert: edit our prior Critique comment instead of stacking one per push.
+          existing = subprocess.run(
+              ["gh", "api", f"repos/{repo}/issues/{pr}/comments", "--paginate",
+               "--jq", f'[.[] | select(.body | startswith("{marker}")) | .id] | first // empty'],
+              capture_output=True, text=True).stdout.strip()
+          # -F (not -f): --field expands `@file` to the file contents; --raw-field
+          # would post the literal string "@/tmp/comment.md".
+          if existing:
+              subprocess.run(["gh", "api", "-X", "PATCH",
+                              f"repos/{repo}/issues/comments/{existing}",
+                              "-F", "body=@/tmp/comment.md"], check=True)
+          else:
+              subprocess.run(["gh", "api", "-X", "POST",
+                              f"repos/{repo}/issues/{pr}/comments",
+                              "-F", "body=@/tmp/comment.md"], check=True)
+          # Step summary: a short, non-attacker-controlled line only (PR/model content
+          # goes solely to the PR comment, which GitHub markdown-sanitizes).
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as fh:
+              fh.write(f"Critique verdict: **{verdict}** (status={rsc}, "
+                       f"findings={len(findings)}, independence={ind.get('status')})\n")
+          # Gate: block on a non-pass verdict or a non-200 review decision.
+          if rsc != 200 or verdict != "pass":
+              print(f"::error::Critique gate: verdict={verdict} result_status_code={rsc}")
+              sys.exit(1)
+          print("Critique gate: pass")
+          PY
