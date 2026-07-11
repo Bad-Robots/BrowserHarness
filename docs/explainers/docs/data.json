@@ -1,0 +1,139 @@
+{
+  "META": {
+    "title": "BrowserHarness \u2014 Workflow Explainer",
+    "intro": "Browser harness CLI integration for Workforce and multi-agent environments",
+    "meta": "batch"
+  },
+  "nodes": [
+    {
+      "id": "u",
+      "label": "User",
+      "sub": "shell/browser",
+      "type": "actor",
+      "x": 62,
+      "y": 150
+    },
+    {
+      "id": "a",
+      "label": "BrowserHarness",
+      "sub": "entry",
+      "type": "entrypoint",
+      "x": 200,
+      "y": 150
+    },
+    {
+      "id": "s",
+      "label": "Service",
+      "sub": "logic",
+      "type": "service",
+      "x": 480,
+      "y": 150
+    },
+    {
+      "id": "d",
+      "label": "Data store",
+      "sub": "persist",
+      "type": "storage",
+      "x": 630,
+      "y": 150
+    }
+  ],
+  "workflows": [
+    {
+      "id": "m",
+      "title": "Primary",
+      "category": "core",
+      "trigger": "User interacts",
+      "summary": "User interacts with BrowserHarness.",
+      "routes": [
+        "GET /",
+        "POST /api"
+      ],
+      "touches": [
+        "store"
+      ],
+      "files": [
+        "src/main.py"
+      ],
+      "edges": [
+        [
+          "u",
+          "a",
+          "interacts"
+        ],
+        [
+          "a",
+          "s",
+          "processes"
+        ],
+        [
+          "s",
+          "d",
+          "reads/writes"
+        ],
+        [
+          "d",
+          "s",
+          "returns"
+        ],
+        [
+          "s",
+          "a",
+          "builds"
+        ],
+        [
+          "a",
+          "u",
+          "renders"
+        ]
+      ]
+    }
+  ],
+  "stepNotes": {
+    "m": [
+      {
+        "action": "User interacts.",
+        "data": [
+          "req"
+        ],
+        "guard": "Auth"
+      },
+      {
+        "action": "App routes.",
+        "data": [
+          "req"
+        ],
+        "guard": "Rate"
+      },
+      {
+        "action": "Service reads/writes.",
+        "data": [
+          "query"
+        ],
+        "guard": "Pool"
+      },
+      {
+        "action": "Storage returns.",
+        "data": [
+          "result"
+        ],
+        "guard": "Read"
+      },
+      {
+        "action": "Service builds.",
+        "data": [
+          "resp"
+        ],
+        "guard": "Ser"
+      },
+      {
+        "action": "App renders.",
+        "data": [
+          "page"
+        ],
+        "guard": "None"
+      }
+    ]
+  },
+  "workflowPieceDetails": {}
+}
