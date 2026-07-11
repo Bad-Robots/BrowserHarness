@@ -1,0 +1,188 @@
+{
+  "META": {
+    "title": "BrowserHarness \u2014 Architecture Explainer",
+    "intro": "Browser harness CLI integration for Workforce and multi-agent environments",
+    "meta": "batch"
+  },
+  "nodes": [
+    {
+      "id": "u",
+      "label": "User",
+      "sub": "shell/browser",
+      "type": "actor",
+      "x": 62,
+      "y": 150
+    },
+    {
+      "id": "a",
+      "label": "BrowserHarness",
+      "sub": "entry",
+      "type": "entrypoint",
+      "x": 200,
+      "y": 150
+    },
+    {
+      "id": "s",
+      "label": "Service",
+      "sub": "logic",
+      "type": "service",
+      "x": 480,
+      "y": 150
+    },
+    {
+      "id": "d",
+      "label": "Data store",
+      "sub": "persist",
+      "type": "storage",
+      "x": 630,
+      "y": 150
+    }
+  ],
+  "workflows": [
+    {
+      "id": "m",
+      "title": "Primary",
+      "category": "core",
+      "trigger": {
+        "narrative": "User interacts",
+        "vibe": "you use it"
+      },
+      "summary": {
+        "narrative": "User interacts with BrowserHarness.",
+        "vibe": "You use BrowserHarness."
+      },
+      "routes": [
+        "GET /",
+        "POST /api"
+      ],
+      "touches": [
+        "store"
+      ],
+      "files": [
+        "src/main.py"
+      ],
+      "edges": [
+        [
+          "u",
+          "a",
+          "interacts"
+        ],
+        [
+          "a",
+          "s",
+          "processes"
+        ],
+        [
+          "s",
+          "d",
+          "reads/writes"
+        ],
+        [
+          "d",
+          "s",
+          "returns"
+        ],
+        [
+          "s",
+          "a",
+          "builds"
+        ],
+        [
+          "a",
+          "u",
+          "renders"
+        ]
+      ]
+    }
+  ],
+  "entryPoints": [
+    {
+      "id": "ep",
+      "label": "Launch",
+      "uiContext": "Terminal",
+      "mockup": "<div class=\"mockup-cli\"><span class=\"prompt\">$</span>./start</div>",
+      "leadsTo": "m",
+      "description": {
+        "narrative": "Starts.",
+        "vibe": "Go."
+      }
+    }
+  ],
+  "stepNarratives": {
+    "m": [
+      {
+        "narrative": "User interacts.",
+        "vibe": "Use.",
+        "anchors": [
+          "u",
+          "a"
+        ],
+        "data": [
+          "payload"
+        ],
+        "guard": "Auth"
+      },
+      {
+        "narrative": "App routes.",
+        "vibe": "Routes.",
+        "anchors": [
+          "a",
+          "s"
+        ],
+        "data": [
+          "req"
+        ],
+        "guard": "Rate"
+      },
+      {
+        "narrative": "Service reads/writes.",
+        "vibe": "RW.",
+        "anchors": [
+          "s",
+          "d"
+        ],
+        "data": [
+          "query"
+        ],
+        "guard": "Pool"
+      },
+      {
+        "narrative": "Storage returns.",
+        "vibe": "Returns.",
+        "anchors": [
+          "d",
+          "s"
+        ],
+        "data": [
+          "result"
+        ],
+        "guard": "Read"
+      },
+      {
+        "narrative": "Service builds.",
+        "vibe": "Builds.",
+        "anchors": [
+          "s",
+          "a"
+        ],
+        "data": [
+          "resp"
+        ],
+        "guard": "Ser"
+      },
+      {
+        "narrative": "App renders.",
+        "vibe": "Shows.",
+        "anchors": [
+          "a",
+          "u"
+        ],
+        "data": [
+          "page"
+        ],
+        "guard": "None"
+      }
+    ]
+  },
+  "nodeNarratives": {}
+}
