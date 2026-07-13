@@ -5,11 +5,11 @@ on:
   workflow_dispatch:
 jobs:
   generate:
-    uses: Bad-Robots/Workforce/.github/workflows/generate-explainer-reusable.yml@6dd0cde3f5604edaa3b7fd9df371538fd2f37c33
+    uses: Bad-Robots/Workforce/.github/workflows/generate-explainer-reusable.yml@eb31a8fcf54ec74e351554a1ada7655bfaca6f3f
     with:
       caller_repo: ${{ github.repository }}
       base_branch: main
-      workforce_ref: 6dd0cde3f5604edaa3b7fd9df371538fd2f37c33
-      runner_labels: '["self-hosted","linux","ARM64","badrobots-build"]'
+      workforce_ref: eb31a8fcf54ec74e351554a1ada7655bfaca6f3f
+      runner_labels: ["self-hosted","linux","ARM64","badrobots-build"]
     secrets:
       CLIBRIDGE_URL: ${{ secrets.CLIBRIDGE_URL }}
