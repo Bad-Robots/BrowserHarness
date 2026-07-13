@@ -11,5 +11,3 @@ jobs:
       base_branch: main
       workforce_ref: e6632873cba6c2368a2295076a352c37feffc38f
       runner_labels: '["self-hosted","linux","ARM64","badrobots-build"]'
-    secrets:
-      WORKFORCE_RUNTIME_TOKEN: ${{ secrets.WORKFORCE_RUNTIME_TOKEN }}
