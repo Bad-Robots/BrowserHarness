@@ -1,0 +1,16 @@
+name: Generate Architecture Explainer
+on:
+  push:
+    branches: [main, staging]
+    paths: ['docs/explainers/**', '.github/workflows/generate-explainer.yml']
+  workflow_dispatch:
+jobs:
+  generate:
+    uses: Bad-Robots/Workforce/.github/workflows/generate-explainer-reusable.yml@6dd0cde3f5604edaa3b7fd9df371538fd2f37c33
+    with:
+      caller_repo: ${{ github.repository }}
+      base_branch: main
+      workforce_ref: 6dd0cde3f5604edaa3b7fd9df371538fd2f37c33
+      runner_labels: '["self-hosted","linux","ARM64","badrobots-build"]'
+    secrets:
+      CLIBRIDGE_URL: ${{ secrets.CLIBRIDGE_URL }}
