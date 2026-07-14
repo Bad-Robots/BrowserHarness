@@ -10,6 +10,5 @@ jobs:
       caller_repo: ${{ github.repository }}
       base_branch: main
       workforce_ref: e6632873cba6c2368a2295076a352c37feffc38f
-      runner_labels: '["self-hosted","linux","ARM64","badrobots-build"]'
     secrets:
       BYPASS_API_KEY: ${{ secrets.BYPASS_API_KEY }}
