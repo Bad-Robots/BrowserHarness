@@ -13,7 +13,7 @@ on:
 jobs:
   review:
     if: github.event_name != 'pull_request' && github.event_name != 'pull_request_target' || github.event.pull_request.head.repo.full_name == github.repository
-    uses: Bad-Robots/Workforce/.github/workflows/pr-review-critique.yml@a980e2243473e2aeac4ea0ed5f356929081d0607
+    uses: Bad-Robots/Workforce/.github/workflows/pr-review-critique.yml@efaa9c0df5f42605dd260a37a195b9521038a7fc
     permissions:
       pull-requests: write
       contents: read
