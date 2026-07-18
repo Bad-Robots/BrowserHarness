@@ -7,11 +7,11 @@ permissions:
   contents: write
 jobs:
   generate:
-    uses: Bad-Robots/Workforce/.github/workflows/generate-explainer-reusable.yml@0b89ea8b3259edd31795e36e035bf00282d27a8f
+    uses: Bad-Robots/Workforce/.github/workflows/generate-explainer-reusable.yml@d3367ad4b11b17ec8fc4f2c22861d40864d84c36
     with:
       caller_repo: ${{ github.repository }}
       base_branch: main
-      workforce_ref: 0b89ea8b3259edd31795e36e035bf00282d27a8f
+      workforce_ref: d3367ad4b11b17ec8fc4f2c22861d40864d84c36
       skip_gate: true
     secrets:
       BYPASS_API_KEY: ${{ secrets.BYPASS_API_KEY }}
