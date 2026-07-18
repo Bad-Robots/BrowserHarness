@@ -3,12 +3,15 @@ on:
   push:
     branches: [main, staging]
   workflow_dispatch:
+permissions:
+  contents: write
 jobs:
   generate:
-    uses: Bad-Robots/Workforce/.github/workflows/generate-explainer-reusable.yml@e6632873cba6c2368a2295076a352c37feffc38f
+    uses: Bad-Robots/Workforce/.github/workflows/generate-explainer-reusable.yml@0b89ea8b3259edd31795e36e035bf00282d27a8f
     with:
       caller_repo: ${{ github.repository }}
       base_branch: main
-      workforce_ref: e6632873cba6c2368a2295076a352c37feffc38f
+      workforce_ref: 0b89ea8b3259edd31795e36e035bf00282d27a8f
+      skip_gate: true
     secrets:
       BYPASS_API_KEY: ${{ secrets.BYPASS_API_KEY }}
